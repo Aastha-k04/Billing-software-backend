@@ -1,4 +1,8 @@
 const numberToWords = (num) => {
+  // Handle NaN, null, undefined or non-numeric
+  num = parseFloat(num);
+  if (isNaN(num) || !isFinite(num)) return 'Zero';
+
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
   const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -14,6 +18,7 @@ const numberToWords = (num) => {
   };
 
   const helper = (n) => {
+    if (isNaN(n) || n < 0) return ''; // Safety check 
     if (n < 1000) return convertLessThanThousand(n);
     if (n < 100000) {
       return convertLessThanThousand(Math.floor(n / 1000)) + ' Thousand' +

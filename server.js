@@ -84,94 +84,7 @@ function authorizeRoles(...roles) {
 }
 
 // ====================== AUTH ROUTES ===========================
-app.post("/api/auth/signup", async (req, res) => {
-  try {
-    const { username, password, role, phone, email } = req.body;
-    console.log("📝 Signup Attempt:", { username, role, phone, email });
-
-    if (!username || !password || !role) {
-      return res.status(400).json({ success: false, message: "Username, password and role are required." });
-    }
-
-    if (role === "customer" && !phone) {
-      return res.status(400).json({ success: false, message: "Phone number is required for customers." });
-    }
-
-    const existingUser = await User.findOne({
-      $or: [
-        { username },
-        { phone: phone || undefined },
-        { email: email || undefined }
-      ].filter(q => Object.values(q)[0] !== undefined)
-    });
-
-    if (existingUser) {
-      console.warn("⚠️ Signup Conflict:", { username, phone, email });
-      return res.status(400).json({ success: false, message: "User with this username, phone or email already exists." });
-    }
-
-    const normalizedPhone = (phone && phone.trim()) || undefined;
-    const normalizedEmail = (email && email.trim()) || undefined;
-
-    const user = new User({
-      username,
-      password,
-      role,
-      phone: role === "customer" ? normalizedPhone : undefined,
-      email: normalizedEmail
-    });
-
-    await user.save();
-    console.log("✅ User Registered:", username);
-
-    res.status(201).json({ success: true, message: "Registration successful." });
-  } catch (err) {
-    console.error("❌ Signup Error:", err);
-    res.status(500).json({ success: false, message: "Signup error", error: err.message });
-  }
-});
-
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    const { username, password, role } = req.body;
-
-    // Find user by username, email, or phone
-    const user = await User.findOne({
-      $or: [
-        { username: username },
-        { email: username },
-        { phone: username }
-      ]
-    });
-
-    if (!user) {
-      return res.status(401).json({ success: false, message: "Invalid credentials." });
-    }
-
-    // Role check if provided
-    if (role && user.role !== role) {
-      return res.status(401).json({ success: false, message: `Access denied for role: ${role}` });
-    }
-
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: "Invalid credentials." });
-    }
-
-    const payload = {
-      id: user._id,
-      username: user.username,
-      role: user.role,
-      phone: user?.phone
-    };
-
-    const token = jwt.sign(payload, SECRET, { expiresIn: "24h" });
-
-    res.json({ success: true, token, user: payload });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Server error during login", error: err.message });
-  }
-});
+// Auth routes are moved to src/routes/authRoutes.js and used via app.use("/api/auth", authRoutes)
 
 // ================== BASIC TEST ROUTES =========================
 app.get("/", (req, res) => {
@@ -192,7 +105,9 @@ const itemRoutes = require("./src/routes/itemRoutes.js");
 const userRoutes = require("./src/routes/userRoutes.js");
 const customerRoutes = require("./src/routes/customerRoutes.js");
 const reviewRoutes = require("./src/routes/reviewRoutes.js");
+const authRoutes = require("./src/routes/authRoutes.js");
 
+app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/admin", adminRoutes);

@@ -20,9 +20,9 @@ const UserSchema = new mongoose.Schema({
     },
     email: {
         type: String,
+        required: true,
         trim: true,
         lowercase: true,
-        sparse: true, // Allows null/unique combination
         unique: true
     },
     phone: {

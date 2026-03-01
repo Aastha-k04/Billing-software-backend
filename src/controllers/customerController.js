@@ -63,7 +63,7 @@ exports.loginCustomer = async (req, res) => {
 // Get Current Customer (Get Me)
 exports.getMe = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select("-password text");
+        const user = await User.findById(req.user.id).select("-password");
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
         res.json({ success: true, user });
     } catch (err) {
@@ -74,17 +74,18 @@ exports.getMe = async (req, res) => {
 // Update Customer
 exports.updateCustomer = async (req, res) => {
     try {
-        const { username, email, phone } = req.body;
+        const { username, email, phone, address } = req.body;
         const user = await User.findById(req.user.id);
 
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-        if (username) user.username = username;
-        if (email) user.email = email;
-        if (phone) user.phone = phone;
+        if (username !== undefined) user.username = username;
+        if (email !== undefined) user.email = email;
+        if (phone !== undefined) user.phone = phone;
+        if (address !== undefined) user.address = address;
 
         await user.save();
-        res.json({ success: true, message: "Profile updated successfully", user: { id: user._id, username: user.username, email: user.email, phone: user.phone } });
+        res.json({ success: true, message: "Profile updated successfully", user: { id: user._id, username: user.username, email: user.email, phone: user.phone, address: user.address } });
     } catch (err) {
         res.status(500).json({ success: false, message: "Update error", error: err.message });
     }
@@ -100,18 +101,28 @@ exports.deleteAccount = async (req, res) => {
     }
 };
 
-// Get Quotations for Customer (based on phone number)
+// Get Quotations for Customer (based on phone number OR customerId)
 exports.getMyQuotations = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
-        if (!user || !user.phone) {
-            return res.status(400).json({ success: false, message: "Phone number is required to fetch quotations." });
+        if (!user) {
+            console.log("⚠️ 400 Bad Request: User not found in database for ID:", req.user.id);
+            return res.status(400).json({ success: false, message: "User not found." });
         }
 
-        const quotations = await Product.find({ number: user.phone })
+        console.log("🔍 Fetching quotations for user:", user.username, "| Phone:", user.phone, "| ID:", user._id);
+
+        // Build query conditions - match by customerId OR phone number
+        const queryConditions = [{ customerId: user._id }];
+        if (user.phone) {
+            queryConditions.push({ number: user.phone });
+        }
+
+        const quotations = await Product.find({ $or: queryConditions })
             .populate("items.item")
             .sort({ createdAt: -1 });
 
+        console.log(`✅ Found ${quotations.length} quotations for user ${user.username}`);
         res.json({ success: true, quotations });
     } catch (err) {
         res.status(500).json({ success: false, message: "Error fetching quotations", error: err.message });

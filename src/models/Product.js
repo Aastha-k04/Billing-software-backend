@@ -231,6 +231,10 @@ const productSchema = new mongoose.Schema({
   createdByUsername: {
     type: String,
     default: "Unknown"
+  },
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
   }
 }, {
   timestamps: true

@@ -29,7 +29,18 @@ const UserSchema = new mongoose.Schema({
         type: String,
         trim: true,
         sparse: true,
-        unique: true
+        unique: true,
+        validate: {
+            validator: function (v) {
+                // Allow null/empty for sparse index, otherwise must be 10 digits
+                return !v || /^\d{10}$/.test(v);
+            },
+            message: props => `${props.value} is not a valid 10-digit phone number!`
+        }
+    },
+    address: {
+        type: String,
+        trim: true
     }
 }, {
     timestamps: true // Adds createdAt and updatedAt fields

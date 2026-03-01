@@ -267,7 +267,9 @@
 
 const Product = require("../models/Product");
 const Item = require("../models/Item");
+const User = require("../models/User");
 const mongoose = require("mongoose");
+const { sendQuotationNotification } = require("../services/emailService");
 
 // Add product
 exports.addProduct = async (req, res) => {
@@ -316,10 +318,19 @@ exports.addProduct = async (req, res) => {
       date: data.date || new Date(),
       items: itemsWithQuantity,
       createdBy: data.userId,
-      createdByUsername: data.username || "Unknown"
+      createdByUsername: data.username || "Unknown",
+      customerId: data.customerId || null
     });
 
     await newProduct.save();
+
+    // Send Email Notification if customerId exists
+    if (data.customerId) {
+      const customer = await User.findById(data.customerId);
+      if (customer && customer.email) {
+        await sendQuotationNotification(customer.email, customer.username, newProduct._id);
+      }
+    }
 
     const populatedProduct = await Product.findById(newProduct._id).populate("items.item");
     const productObj = populatedProduct.toObject();

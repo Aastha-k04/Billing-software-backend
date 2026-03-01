@@ -22,18 +22,18 @@ router.get("/", async (req, res) => {
 // REGISTER USER
 router.post("/register", authenticateToken, isAdmin, async (req, res) => {
     try {
-        const { username, password, role } = req.body;
+        const { username, email, password, role, phone } = req.body;
 
-        if (!username || !password) {
-            return res.status(400).json({ success: false, message: "Username and password required" });
+        if (!username || !password || !email) {
+            return res.status(400).json({ success: false, message: "Username, email and password required" });
         }
 
-        const existing = await User.findOne({ username });
+        const existing = await User.findOne({ $or: [{ username }, { email }] });
         if (existing) {
-            return res.status(400).json({ success: false, message: "Username already exists" });
+            return res.status(400).json({ success: false, message: "Username or email already exists" });
         }
 
-        const newUser = new User({ username, password, role: role || "sales" });
+        const newUser = new User({ username, email, password, role: role || "sales", phone });
         await newUser.save();
 
         res.status(201).json({ success: true, message: "User created" });

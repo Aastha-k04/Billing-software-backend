@@ -6,6 +6,7 @@ const path = require("path");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
+const connectDB = require("./src/config/db");
 const { authenticateToken, isAdmin, SECRET } = require("./src/middleware/auth");
 
 const User = require("./src/models/User");
@@ -18,30 +19,17 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// Request Logger
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`);
+  });
+  next();
+});
+
 // ================== MONGODB CONNECTION ========================
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 10000,
-    });
-    console.log("✅ MongoDB connected");
-
-    try {
-      await User.collection.dropIndex("email_1");
-      console.log("✅ Dropped old email index");
-    } catch (err) {
-      if (err.message.includes("index not found")) {
-        console.log("ℹ️ No email index to drop (OK)");
-      }
-    }
-  } catch (err) {
-    console.error("❌ MongoDB connection error:", err.message);
-    process.exit(1);
-  }
-};
-
 connectDB();
 
 mongoose.connection.on("connected", () => console.log("🟢 Mongoose connected"));
@@ -99,21 +87,8 @@ app.get("/api/me", authenticateToken, (req, res) => {
   res.json({ user: req.user });
 });
 
-const productRoutes = require("./src/routes/productRoutes.js");
-const adminRoutes = require("./src/routes/adminRoutes.js");
-const itemRoutes = require("./src/routes/itemRoutes.js");
-const userRoutes = require("./src/routes/userRoutes.js");
-const customerRoutes = require("./src/routes/customerRoutes.js");
-const reviewRoutes = require("./src/routes/reviewRoutes.js");
-const authRoutes = require("./src/routes/authRoutes.js");
-
-app.use("/api/auth", authRoutes);
-app.use("/api/products", productRoutes);
-app.use("/api/items", itemRoutes);
-app.use("/admin", adminRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/customer", customerRoutes);
-app.use("/api/reviews", reviewRoutes);
+// ====================== REGISTER ROUTES ========================
+require("./src/routes")(app);
 
 // ===================== ERROR HANDLERS ==========================
 app.use((req, res) => {
@@ -134,7 +109,7 @@ app.use((err, req, res, next) => {
 });
 
 // ===================== START SERVER ============================
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5004;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });

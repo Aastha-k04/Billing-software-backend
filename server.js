@@ -6,6 +6,7 @@ const path = require("path");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
+const connectDB = require("./src/config/db");
 const { authenticateToken, isAdmin, SECRET } = require("./src/middleware/auth");
 
 const User = require("./src/models/User");
@@ -17,31 +18,19 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Request Logger
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${res.statusCode} - ${duration}ms`);
+  });
+  next();
+});
 
 // ================== MONGODB CONNECTION ========================
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 10000,
-    });
-    console.log("✅ MongoDB connected");
-
-    try {
-      await User.collection.dropIndex("email_1");
-      console.log("✅ Dropped old email index");
-    } catch (err) {
-      if (err.message.includes("index not found")) {
-        console.log("ℹ️ No email index to drop (OK)");
-      }
-    }
-  } catch (err) {
-    console.error("❌ MongoDB connection error:", err.message);
-    process.exit(1);
-  }
-};
-
 connectDB();
 
 mongoose.connection.on("connected", () => console.log("🟢 Mongoose connected"));
@@ -84,94 +73,7 @@ function authorizeRoles(...roles) {
 }
 
 // ====================== AUTH ROUTES ===========================
-app.post("/api/auth/signup", async (req, res) => {
-  try {
-    const { username, password, role, phone, email } = req.body;
-    console.log("📝 Signup Attempt:", { username, role, phone, email });
-
-    if (!username || !password || !role) {
-      return res.status(400).json({ success: false, message: "Username, password and role are required." });
-    }
-
-    if (role === "customer" && !phone) {
-      return res.status(400).json({ success: false, message: "Phone number is required for customers." });
-    }
-
-    const existingUser = await User.findOne({
-      $or: [
-        { username },
-        { phone: phone || undefined },
-        { email: email || undefined }
-      ].filter(q => Object.values(q)[0] !== undefined)
-    });
-
-    if (existingUser) {
-      console.warn("⚠️ Signup Conflict:", { username, phone, email });
-      return res.status(400).json({ success: false, message: "User with this username, phone or email already exists." });
-    }
-
-    const normalizedPhone = (phone && phone.trim()) || undefined;
-    const normalizedEmail = (email && email.trim()) || undefined;
-
-    const user = new User({
-      username,
-      password,
-      role,
-      phone: role === "customer" ? normalizedPhone : undefined,
-      email: normalizedEmail
-    });
-
-    await user.save();
-    console.log("✅ User Registered:", username);
-
-    res.status(201).json({ success: true, message: "Registration successful." });
-  } catch (err) {
-    console.error("❌ Signup Error:", err);
-    res.status(500).json({ success: false, message: "Signup error", error: err.message });
-  }
-});
-
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    const { username, password, role } = req.body;
-
-    // Find user by username, email, or phone
-    const user = await User.findOne({
-      $or: [
-        { username: username },
-        { email: username },
-        { phone: username }
-      ]
-    });
-
-    if (!user) {
-      return res.status(401).json({ success: false, message: "Invalid credentials." });
-    }
-
-    // Role check if provided
-    if (role && user.role !== role) {
-      return res.status(401).json({ success: false, message: `Access denied for role: ${role}` });
-    }
-
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: "Invalid credentials." });
-    }
-
-    const payload = {
-      id: user._id,
-      username: user.username,
-      role: user.role,
-      phone: user?.phone
-    };
-
-    const token = jwt.sign(payload, SECRET, { expiresIn: "24h" });
-
-    res.json({ success: true, token, user: payload });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Server error during login", error: err.message });
-  }
-});
+// Auth routes are moved to src/routes/authRoutes.js and used via app.use("/api/auth", authRoutes)
 
 // ================== BASIC TEST ROUTES =========================
 app.get("/", (req, res) => {
@@ -186,19 +88,8 @@ app.get("/api/me", authenticateToken, (req, res) => {
   res.json({ user: req.user });
 });
 
-const productRoutes = require("./src/routes/productRoutes.js");
-const adminRoutes = require("./src/routes/adminRoutes.js");
-const itemRoutes = require("./src/routes/itemRoutes.js");
-const userRoutes = require("./src/routes/userRoutes.js");
-const customerRoutes = require("./src/routes/customerRoutes.js");
-const reviewRoutes = require("./src/routes/reviewRoutes.js");
-
-app.use("/api/products", productRoutes);
-app.use("/api/items", itemRoutes);
-app.use("/admin", adminRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/customer", customerRoutes);
-app.use("/api/reviews", reviewRoutes);
+// ====================== REGISTER ROUTES ========================
+require("./src/routes")(app);
 
 // ===================== ERROR HANDLERS ==========================
 app.use((req, res) => {
@@ -219,7 +110,7 @@ app.use((err, req, res, next) => {
 });
 
 // ===================== START SERVER ============================
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5004;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });

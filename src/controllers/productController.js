@@ -267,7 +267,9 @@
 
 const Product = require("../models/Product");
 const Item = require("../models/Item");
+const User = require("../models/User");
 const mongoose = require("mongoose");
+const { sendQuotationNotification } = require("../services/emailService");
 
 // Add product
 exports.addProduct = async (req, res) => {
@@ -316,10 +318,19 @@ exports.addProduct = async (req, res) => {
       date: data.date || new Date(),
       items: itemsWithQuantity,
       createdBy: data.userId,
-      createdByUsername: data.username || "Unknown"
+      createdByUsername: data.username || "Unknown",
+      customerId: data.customerId || null
     });
 
     await newProduct.save();
+
+    // Send Email Notification if customerId exists
+    if (data.customerId) {
+      const customer = await User.findById(data.customerId);
+      if (customer && customer.email) {
+        await sendQuotationNotification(customer.email, customer.username, newProduct._id);
+      }
+    }
 
     const populatedProduct = await Product.findById(newProduct._id).populate("items.item");
     const productObj = populatedProduct.toObject();
@@ -363,23 +374,37 @@ exports.getProducts = async (req, res) => {
 
     console.log(`🔍 Fetching products for userId: ${userId}`);
 
+    // 🔥 Check user role for admin sync
+    const userRequesting = await User.findById(userId);
+    const isAdmin = userRequesting && userRequesting.role === 'admin';
+
     // DEBUG: Check total products in DB
     const totalCount = await Product.countDocuments();
-    console.log(`📊 Total products in database: ${totalCount}`);
+    console.log(`📊 Total products in database: ${totalCount} | IsAdmin: ${isAdmin}`);
 
-    // 🔥 ALWAYS filter by userId, but also include legacy records (those without createdBy field)
-    const products = await Product.find({
+    // 🔥 Filter by userId for sales/customers, but allow admins to see everything
+    const filter = isAdmin ? {} : {
       $or: [
         { createdBy: userId },
         { createdBy: { $exists: false } }
       ]
-    })
+    };
+
+    const products = await Product.find(filter)
       .populate("items.item")
+      .populate("customerId", "username phone address")
       .sort({ date: -1 })
       .lean();
 
     const transformedProducts = products.map(product => {
       product.includeGst = product.includeGst === true;
+
+      // Dynamic Profile Sync: Override with latest profile info if customerId exists
+      if (product.customerId) {
+        product.name = product.customerId.username || product.name;
+        product.number = product.customerId.phone || product.number;
+        product.address = product.customerId.address || product.address;
+      }
 
       if (!product.address) {
         product.address = "SURAT";
@@ -430,6 +455,7 @@ exports.getProductById = async (req, res) => {
 
     const product = await Product.findById(req.params.id)
       .populate("items.item")
+      .populate("customerId", "username phone address")
       .lean();
 
     if (!product) {
@@ -437,6 +463,13 @@ exports.getProductById = async (req, res) => {
         success: false,
         message: "Product not found"
       });
+    }
+
+    // Dynamic Profile Sync: Override static data with latest from profile if available
+    if (product.customerId) {
+      product.name = product.customerId.username || product.name;
+      product.number = product.customerId.phone || product.number;
+      product.address = product.customerId.address || product.address;
     }
 
     // 🔥 STRICT: Check ownership
@@ -505,6 +538,15 @@ exports.editProduct = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Access denied - you can only edit your own products",
+      });
+    }
+
+    // 🔥 ROLE CHECK: Sales Persons cannot edit quotations from dashboard
+    const userRequesting = await User.findById(data.userId);
+    if (userRequesting && userRequesting.role === 'sales') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied - Sales Persons are not authorized to edit quotations"
       });
     }
 
@@ -586,6 +628,15 @@ exports.deleteProduct = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Access denied - you can only delete your own products",
+      });
+    }
+
+    // 🔥 ROLE CHECK: Sales Persons cannot delete quotations
+    const userRequesting = await User.findById(userId);
+    if (userRequesting && userRequesting.role === 'sales') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied - Sales Persons are not authorized to delete quotations"
       });
     }
 

@@ -159,7 +159,7 @@ exports.changeOwnPassword = async (req, res) => {
         }
 
         // Save new password
-        user.password = await bcrypt.hash(newPassword, 10);
+        user.password = newPassword;
         await user.save();
 
         res.json({ success: true, message: "Password changed successfully" });
@@ -205,7 +205,7 @@ exports.adminChangeOwnPassword = async (req, res) => {
         }
 
         // Save new password
-        user.password = await bcrypt.hash(newPassword, 10);
+        user.password = newPassword;
         await user.save();
 
         res.json({ success: true, message: "Admin password updated successfully" });
@@ -213,5 +213,54 @@ exports.adminChangeOwnPassword = async (req, res) => {
     } catch (error) {
         console.error("Admin Change Own Password error:", error);
         res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+
+// ---------------------------------------
+// ADMIN -> CHANGE ANY USER'S PASSWORD
+// ---------------------------------------
+exports.adminChangePassword = async (req, res) => {
+    try {
+        const { userId, newPassword } = req.body;
+
+        if (!userId || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "User ID and new password are required"
+            });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "New password must be at least 6 characters long"
+            });
+        }
+
+        // Find target user
+        const targetUser = await User.findById(userId);
+        if (!targetUser) {
+            return res.status(404).json({
+                success: false,
+                message: "Target user not found"
+            });
+        }
+
+        // Update password
+        targetUser.password = newPassword;
+        await targetUser.save();
+
+        res.status(200).json({
+            success: true,
+            message: `Password changed successfully for user: ${targetUser.username}`
+        });
+
+    } catch (error) {
+        console.error("Admin change user password error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: error.message
+        });
     }
 };

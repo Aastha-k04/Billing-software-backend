@@ -63,7 +63,7 @@ exports.loginCustomer = async (req, res) => {
 // Get Current Customer (Get Me)
 exports.getMe = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select("-password text");
+        const user = await User.findById(req.user.id).select("-password");
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
         res.json({ success: true, user });
     } catch (err) {
@@ -74,17 +74,18 @@ exports.getMe = async (req, res) => {
 // Update Customer
 exports.updateCustomer = async (req, res) => {
     try {
-        const { username, email, phone } = req.body;
+        const { username, email, phone, address } = req.body;
         const user = await User.findById(req.user.id);
 
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-        if (username) user.username = username;
-        if (email) user.email = email;
-        if (phone) user.phone = phone;
+        if (username !== undefined) user.username = username;
+        if (email !== undefined) user.email = email;
+        if (phone !== undefined) user.phone = phone;
+        if (address !== undefined) user.address = address;
 
         await user.save();
-        res.json({ success: true, message: "Profile updated successfully", user: { id: user._id, username: user.username, email: user.email, phone: user.phone } });
+        res.json({ success: true, message: "Profile updated successfully", user: { id: user._id, username: user.username, email: user.email, phone: user.phone, address: user.address } });
     } catch (err) {
         res.status(500).json({ success: false, message: "Update error", error: err.message });
     }
@@ -100,19 +101,56 @@ exports.deleteAccount = async (req, res) => {
     }
 };
 
-// Get Quotations for Customer (based on phone number)
+// Get Quotations for Customer (based on phone number OR customerId)
 exports.getMyQuotations = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
-        if (!user || !user.phone) {
-            return res.status(400).json({ success: false, message: "Phone number is required to fetch quotations." });
+        if (!user) {
+            console.log("⚠️ 400 Bad Request: User not found in database for ID:", req.user.id);
+            return res.status(400).json({ success: false, message: "User not found." });
         }
 
-        const quotations = await Product.find({ number: user.phone })
-            .populate("items.item")
-            .sort({ createdAt: -1 });
+        console.log("🔍 Fetching quotations for user:", user.username, "| Phone:", user.phone, "| ID:", user._id);
 
-        res.json({ success: true, quotations });
+        // Build query conditions - match by customerId OR phone number
+        const queryConditions = [{ customerId: user._id }];
+        if (user.phone) {
+            queryConditions.push({ number: user.phone });
+        }
+
+        const quotations = await Product.find({ $or: queryConditions })
+            .populate("items.item")
+            .populate("customerId", "username phone address")
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const transformedQuotations = quotations.map(product => {
+            // Ensure includeGst is always present as boolean
+            product.includeGst = product.includeGst === true;
+
+            // Dynamic Profile Sync: Override with latest profile info if customerId exists
+            if (product.customerId) {
+                product.name = product.customerId.username || product.name;
+                product.number = product.customerId.phone || product.number;
+                product.address = product.customerId.address || product.address;
+            }
+
+            // Transform items to flatten the { item: {...}, quantity } structure
+            product.items = (product.items || []).map(itemEntry => {
+                if (itemEntry.item) {
+                    return {
+                        ...itemEntry.item,
+                        quantity: itemEntry.quantity,
+                    };
+                }
+                return null;
+            }).filter(item => item !== null);
+
+            return product;
+        });
+
+        console.log(`✅ Found and transformed ${transformedQuotations.length} quotations for user ${user.username}`);
+        res.json({ success: true, quotations: transformedQuotations });
     } catch (err) {
         res.status(500).json({ success: false, message: "Error fetching quotations", error: err.message });
     }

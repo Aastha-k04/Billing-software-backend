@@ -1,5 +1,4 @@
 const numberToWords = (num) => {
-  // Handle NaN, null, undefined or non-numeric
   num = parseFloat(num);
   if (isNaN(num) || !isFinite(num)) return 'Zero';
 
@@ -18,7 +17,7 @@ const numberToWords = (num) => {
   };
 
   const helper = (n) => {
-    if (isNaN(n) || n < 0) return ''; // Safety check 
+    if (isNaN(n) || n < 0) return '';
     if (n < 1000) return convertLessThanThousand(n);
     if (n < 100000) {
       return convertLessThanThousand(Math.floor(n / 1000)) + ' Thousand' +
@@ -35,36 +34,36 @@ const numberToWords = (num) => {
   return helper(num);
 };
 
-const formatCurrency = (value) => (parseFloat(value) || 0).toFixed(2);
+const formatCurrency = (value) => (parseFloat(value) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const generatePDFTemplate = (product, itemsWithImages) => {
   const discountPercent = parseFloat(product.dis) || 0;
   const includeGst = product.includeGst === true;
 
-  const othersTotal = itemsWithImages.reduce((sum, item) => sum + item.amount, 0);
-  const totalAmount = othersTotal;
-  const netAmount = othersTotal;
-  const totalWithoutDiscount = othersTotal / (1 - discountPercent / 100);
-  const cgst = includeGst ? (othersTotal * 0.09) : 0;
-  const sgst = includeGst ? (othersTotal * 0.09) : 0;
-  const totalAmountWithGst = othersTotal + cgst + sgst;
-  const roundOff = Math.round(totalAmountWithGst) - totalAmountWithGst;
-  const finalAmount = Math.round(totalAmountWithGst);
+  const itemsSubtotal = itemsWithImages.reduce((sum, item) => sum + item.amount, 0);
+  const discountAmount = (itemsSubtotal * discountPercent) / 100;
+  const afterDiscount = itemsSubtotal - discountAmount;
+
+  const cgst = includeGst ? (afterDiscount * 0.09) : 0;
+  const sgst = includeGst ? (afterDiscount * 0.09) : 0;
+  const totalWithGst = afterDiscount + cgst + sgst;
+
+  const finalAmount = Math.round(totalWithGst);
+  const roundOff = finalAmount - totalWithGst;
 
   const itemRowsHtml = itemsWithImages.map(item => `
     <tr>
       <td class="col-srno text-center">${item.serialNo}</td>
       <td class="col-desc text-left desc-cell">
-        <strong>${item.name}</strong>
-        ${item.description ? `<br><span style="font-size: 9px; color: #666;">${item.description}</span>` : ''}
+        <div class="item-name">${item.name}</div>
+        ${item.description ? `<div class="item-desc">${item.description}</div>` : ''}
       </td>
       <td class="col-sku text-center">${item.code || '-'}</td>
       <td class="col-image img-cell">
         ${item.base64 ? `<img src="${item.base64}" class="item-image" alt="${item.name}">` : ''}
       </td>
       <td class="col-price text-right">${formatCurrency(item.rate)}</td>
-      <td class="col-qty text-center">${formatCurrency(item.qty)} PCS</td>
-      <td class="col-disc text-right">${formatCurrency(discountPercent)}</td>
+      <td class="col-qty text-center">${item.qty} PCS</td>
       <td class="col-amount text-right">${formatCurrency(item.amount)}</td>
     </tr>
   `).join('');
@@ -74,95 +73,200 @@ const generatePDFTemplate = (product, itemsWithImages) => {
 <head>
   <meta charset="UTF-8">
   <style>
+    @page { size: A4; margin: 10mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; background: white; color: black; font-size: 10px; line-height: 1.2; }
-    .page { width: 210mm; min-height: 297mm; margin: 0 auto; background: white; padding: 10px; }
-    .header { border: 2px solid #000; padding: 10px; margin-bottom: 0; }
-    .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-    .company-info { flex: 1; }
-    .logo-section { width: 80px; margin-right: 15px; }
-    .logo-box { width: 70px; height: 70px; border: 2px solid #000; display: flex; align-items: center; justify-content: center; background: #f5f5f5; margin-bottom: 5px; }
-    .company-name { font-size: 18px; font-weight: bold; margin-bottom: 3px; }
-    .company-address { font-size: 9px; line-height: 1.3; margin-bottom: 5px; }
-    .quotation-title { text-align: center; font-size: 16px; font-weight: bold; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 5px 0; margin: 10px 0; }
-    .header-info { display: flex; justify-content: space-between; }
-    .header-left, .header-right { width: 48%; }
-    .info-line { font-size: 9px; margin-bottom: 3px; display: flex; }
-    .info-label { font-weight: bold; width: 120px; flex-shrink: 0; }
-    .info-value { flex: 1; }
-    .items-section { border-left: 2px solid #000; border-right: 2px solid #000; border-bottom: 2px solid #000; }
-    .section-header { background: #f0f0f0; padding: 5px 8px; font-weight: bold; font-size: 10px; border-bottom: 1px solid #000; text-align: center; }
-    table { width: 100%; border-collapse: collapse; font-size: 9px; table-layout: fixed; }
-    th { background: #f0f0f0; padding: 6px 4px; border: 1px solid #000; text-align: center; font-weight: bold; font-size: 9px; }
-    td { padding: 6px 4px; border: 1px solid #000; vertical-align: middle; }
-    .col-srno { width: 5%; }
-    .col-desc { width: 30%; }
-    .col-sku { width: 12%; }
-    .col-image { width: 13%; }
-    .col-price { width: 10%; }
-    .col-qty { width: 10%; }
-    .col-disc { width: 10%; }
-    .col-amount { width: 10%; }
-    .text-left { text-align: left; }
+    body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: white; color: #1a1a1a; font-size: 10px; line-height: 1.4; }
+    .page { width: 100%; max-width: 210mm; margin: 0 auto; background: white; }
+    
+    .header-container { border: 1.5px solid #000; margin-bottom: 15px; }
+    .header-top { display: flex; border-bottom: 1.5px solid #000; }
+    .logo-section { width: 120px; border-right: 1.5px solid #000; padding: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .logo-text { font-size: 20px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
+    
+    .company-info { flex: 1; padding: 15px; }
+    .company-name { font-size: 22px; font-weight: 900; color: #000; margin-bottom: 4px; }
+    .company-address { font-size: 9px; color: #444; max-width: 300px; font-style: italic; }
+    
+    .quotation-meta { width: 220px; border-left: 1.5px solid #000; padding: 15px; }
+    .meta-item { display: flex; margin-bottom: 6px; }
+    .meta-label { font-weight: 800; width: 90px; text-transform: uppercase; font-size: 9px; color: #555; }
+    .meta-value { font-weight: 700; color: #000; }
+    
+    .title-bar { background: #000; color: white; text-align: center; padding: 8px 0; font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: 4px; }
+    
+    .buyer-info { display: flex; border-bottom: 1.5px solid #000; }
+    .buyer-details { flex: 1; padding: 12px 15px; border-right: 1.5px solid #000; }
+    .buyer-label { font-[black] uppercase text-zinc-500 tracking-widest text-[8px] mb-2 block; color: #666; font-weight: 800; font-size: 8px; border-bottom: 1px solid #eee; padding-bottom: 2px; margin-bottom: 4px; }
+    .buyer-name { font-size: 13px; font-weight: 900; color: #000; text-transform: uppercase; }
+    .buyer-address { font-size: 9px; color: #333; margin-top: 4px; font-style: italic; }
+    
+    .prepared-details { width: 220px; padding: 12px 15px; }
+    .prepared-name { font-size: 11px; font-weight: 700; color: #000; }
+
+    .items-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; margin-bottom: 15px; }
+    .items-table th { background: #f4f4f4; border: 1px solid #000; padding: 8px 5px; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+    .items-table td { border: 1px solid #000; padding: 8px 6px; vertical-align: middle; }
+    
+    .col-srno { width: 35px; text-align: center; }
+    .col-desc { width: auto; }
+    .col-sku { width: 80px; text-align: center; }
+    .col-image { width: 70px; text-align: center; }
+    .col-price { width: 85px; text-align: right; }
+    .col-qty { width: 60px; text-align: center; }
+    .col-amount { width: 90px; text-align: right; }
+    
+    .item-name { font-weight: 700; font-size: 10px; margin-bottom: 2px; }
+    .item-desc { font-size: 8px; color: #666; font-style: italic; }
+    .item-image { width: 50px; height: 50px; object-fit: contain; }
+    
+    .bottom-section { display: flex; gap: 15px; }
+    .notes-area { flex: 1; border: 1.5px solid #000; padding: 12px; }
+    .notes-title { font-weight: 900; font-size: 9px; text-decoration: underline; margin-bottom: 8px; text-transform: uppercase; }
+    .notes-list { list-style: none; font-size: 8.5px; color: #444; }
+    .notes-list li { margin-bottom: 4px; position: relative; padding-left: 12px; }
+    .notes-list li:before { content: "•"; position: absolute; left: 0; font-weight: bold; }
+    
+    .summary-area { width: 280px; border: 1.5px solid #000; }
+    .summary-row { display: flex; border-bottom: 1px solid #eee; padding: 6px 10px; justify-content: space-between; align-items: center; }
+    .summary-row:last-of-type { border-bottom: none; }
+    .summary-label { font-weight: 700; font-size: 8.5px; color: #555; text-transform: uppercase; }
+    .summary-value { font-weight: 700; font-size: 10px; color: #000; }
+    
+    .grand-total-row { background: #000; color: white; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .grand-total-label { font-weight: 900; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+    .grand-total-value { font-size: 15px; font-weight: 900; }
+    
+    .words-section { background: #f9f9f9; padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 9px; }
+    .words-label { font-weight: 800; text-transform: uppercase; color: #666; font-size: 8px; margin-bottom: 2px; display: block; }
+    .words-value { font-weight: 700; color: #000; font-style: italic; }
+    
+    .signature-section { margin-top: 25px; display: flex; justify-content: flex-end; }
+    .sign-box { text-align: center; width: 200px; }
+    .sign-label { font-size: 9px; font-weight: 800; margin-bottom: 40px; text-transform: uppercase; }
+    .sign-name { font-size: 10px; font-weight: 900; border-top: 1.5px solid #000; padding-top: 5px; }
+    
     .text-right { text-align: right; }
     .text-center { text-align: center; }
-    .desc-cell { text-align: left; padding-left: 8px; word-wrap: break-word; }
-    .img-cell { padding: 4px; text-align: center; }
-    .item-image { width: 60px; height: 60px; object-fit: contain; display: block; margin: 0 auto; }
-    .summary-section { border-left: 2px solid #000; border-right: 2px solid #000; border-bottom: 2px solid #000; padding: 10px; }
-    .summary-table { width: 100%; margin-bottom: 10px; }
-    .summary-table td { padding: 4px 8px; border: 1px solid #000; font-size: 9px; }
-    .summary-label { font-weight: bold; background: #f0f0f0; width: 30%; }
-    .area-label { font-weight: bold; background: #f0f0f0; text-align: center; }
-    .net-amount-row { font-weight: bold; }
-    .final-amount-label { font-weight: bold; font-size: 11px; text-align: right; padding: 8px; background: #000; color: white; }
-    .final-amount-value { font-weight: bold; font-size: 11px; text-align: right; padding: 8px; background: #000; color: white; }
-    .terms-section { border: 2px solid #000; padding: 8px 10px; margin-bottom: 0; }
-    .terms-title { font-weight: bold; font-size: 11px; margin-bottom: 5px; text-decoration: underline; }
-    .terms-list { font-size: 9px; line-height: 1.4; padding-left: 18px; margin: 0; }
-    .terms-list li { margin-bottom: 3px; }
-    .brands-section { border-left: 2px solid #000; border-right: 2px solid #000; border-bottom: 2px solid #000; padding: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: center; justify-items: center; }
-    .brand-item { display: flex; align-items: center; justify-content: center; text-align: center; }
-    .footer { border-left: 2px solid #000; border-right: 2px solid #000; border-bottom: 2px solid #000; padding: 20px 10px 8px; text-align: right; font-size: 9px; }
-    @media print {
-      body { margin: 0; padding: 0; }
-      .page { margin: 0; padding: 10mm; page-break-after: always; }
-      .page:last-child { page-break-after: auto; }
-    }
   </style>
 </head>
 <body>
   <div class="page">
-    <div class="header">
+    <div class="header-container">
       <div class="header-top">
-        <div class="logo-section"><div class="logo-box"><strong>QUANTILE</strong></div></div>
+        <div class="logo-section">
+          <div class="logo-text">QUANTILE</div>
+        </div>
         <div class="company-info">
           <div class="company-name">QUANTILE</div>
           <div class="company-address">JAL CHHAYA ROW HOUSE, SATELLITE ROAD, PUNA, MOTA VARACHHA, Surat, Gujarat - 394101</div>
         </div>
-        <div class="header-right">
-          <div class="info-line"><span class="info-label">Quotation No:</span><span>${product._id.toString().slice(-8).toUpperCase()}</span></div>
-          <div class="info-line"><span class="info-label">Date:</span><span>${new Date(product.date).toLocaleDateString("en-GB")}</span></div>
+        <div class="quotation-meta">
+          <div class="meta-item">
+            <span class="meta-label">Quotation #:</span>
+            <span class="meta-value">${product._id.toString().slice(-12).toUpperCase()}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Date:</span>
+            <span class="meta-value">${new Date(product.date).toLocaleDateString("en-GB", { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Validity:</span>
+            <span class="meta-value">15 Days</span>
+          </div>
         </div>
       </div>
-      <div class="quotation-title">Quotation</div>
-      <div class="header-info">
-        <div class="header-left"><strong>Buyer:</strong> ${product.name || 'N/A'}<br>${product.address || ''}</div>
+      
+      <div class="title-bar">QUOTATION DOCUMENT</div>
+      
+      <div class="buyer-info">
+        <div class="buyer-details">
+          <span class="buyer-label">Bill To / Deliver To</span>
+          <div class="buyer-name">${product.name || 'VALUED CUSTOMER'}</div>
+          <div class="buyer-address">${product.address || 'SURAT, GUJARAT'}</div>
+          <div style="margin-top: 5px; font-size: 9px; font-weight: 700;">TEL: ${product.number || '-'}</div>
+        </div>
+        <div class="prepared-details">
+          <span class="buyer-label">Prepared By</span>
+          <div class="prepared-name">${product.createdByUsername || 'ADMINISTRATOR'}</div>
+          <div style="font-size: 8px; color: #555; margin-top: 2px;">SALES DEPARTMENT</div>
+        </div>
       </div>
     </div>
-    <div class="items-section">
-      <table>
-        <thead><tr><th>SR</th><th>DESCRIPTION</th><th>SKU</th><th>IMAGE</th><th>PRICE</th><th>QTY</th><th>DISC</th><th>AMOUNT</th></tr></thead>
-        <tbody>${itemRowsHtml}</tbody>
-      </table>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th class="col-srno">SR</th>
+          <th class="col-desc">ITEM DESCRIPTION</th>
+          <th class="col-sku">SKU / CODE</th>
+          <th class="col-image">IMAGE</th>
+          <th class="col-price">RATE (₹)</th>
+          <th class="col-qty">QTY</th>
+          <th class="col-amount">TOTAL (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRowsHtml}
+      </tbody>
+    </table>
+
+    <div class="bottom-section">
+      <div class="notes-area">
+        <div class="notes-title">Terms and Conditions</div>
+        <ul class="notes-list">
+          <li>Goods once sold will not be taken back or exchanged.</li>
+          <li>We are not responsible for any damage during transit.</li>
+          <li>Subject to Surat Jurisdiction only.</li>
+          <li>Please check the products and quantity at the time of delivery.</li>
+        </ul>
+      </div>
+      
+      <div class="summary-area">
+        <div class="summary-row">
+          <span class="summary-label">Gross Subtotal (Excl. Tax)</span>
+          <span class="summary-value">₹${formatCurrency(itemsSubtotal)}</span>
+        </div>
+        
+        ${discountPercent > 0 ? `
+        <div class="summary-row" style="color: #c2410c;">
+          <span class="summary-label">Discount Applied (${discountPercent}%)</span>
+          <span class="summary-value">-₹${formatCurrency(discountAmount)}</span>
+        </div>
+        ` : ''}
+        
+        <div class="summary-row">
+          <span class="summary-label">Taxable Value</span>
+          <span class="summary-value">₹${formatCurrency(afterDiscount)}</span>
+        </div>
+
+        <div class="summary-row">
+          <span class="summary-label">GST 18% (${includeGst ? 'INCL' : 'EXCL'})</span>
+          <span class="summary-value">₹${formatCurrency(cgst + sgst)}</span>
+        </div>
+
+        <div class="summary-row" style="border-top: 1.5px solid #eee;">
+          <span class="summary-label">Round Off</span>
+          <span class="summary-value">${roundOff >= 0 ? '+' : ''}${formatCurrency(roundOff)}</span>
+        </div>
+
+        <div class="words-section">
+          <span class="words-label">Amount in Words</span>
+          <div class="words-value">${numberToWords(finalAmount)} Rupees Only</div>
+        </div>
+
+        <div class="grand-total-row">
+          <span class="grand-total-label">Grand Total</span>
+          <span class="grand-total-value">₹${formatCurrency(finalAmount)}</span>
+        </div>
+      </div>
     </div>
-    <div class="summary-section">
-      <table class="summary-table">
-        <tr><td class="summary-label">Final Amount:</td><td class="final-amount-value">${formatCurrency(finalAmount)}</td></tr>
-      </table>
-      <div><strong>Amount (in words):</strong> ${numberToWords(finalAmount)} Rupees Only</div>
+
+    <div class="signature-section">
+      <div class="sign-box">
+        <div class="sign-label">FOR QUANTILE</div>
+        <div class="sign-name">Authorized Signatory</div>
+      </div>
     </div>
-    <div class="footer">For <strong>VRAJ DIGITAL TILES</strong><br>Authorized Signatory</div>
   </div>
 </body>
 </html>`;

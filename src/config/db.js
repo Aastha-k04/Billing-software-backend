@@ -2,10 +2,15 @@ const mongoose = require("mongoose");
 
 const connectDB = async () => {
   try {
-    await mongoose.connect("mongodb://103.251.19.39/32/raj_tiles_database"); // your DB name
-    console.log("MongoDB Connected ✅");
+    const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/raj_tiles_database";
+    await mongoose.connect(mongoUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 10000,
+    });
+    console.log("✅ MongoDB Connected");
   } catch (error) {
-    console.error("DB Connection Failed ❌", error.message);
+    console.error("❌ DB Connection Failed:", error.message);
     process.exit(1);
   }
 };

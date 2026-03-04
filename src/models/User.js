@@ -41,6 +41,22 @@ const UserSchema = new mongoose.Schema({
     address: {
         type: String,
         trim: true
+    },
+    profileImage: {
+        type: String,
+        default: null
+    },
+    firstName: {
+        type: String,
+        trim: true
+    },
+    lastName: {
+        type: String,
+        trim: true
+    },
+    company: {
+        type: String,
+        trim: true
     }
 }, {
     timestamps: true // Adds createdAt and updatedAt fields

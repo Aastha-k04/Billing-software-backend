@@ -26,12 +26,22 @@ exports.downloadQuotationPDF = async (req, res) => {
     try {
         const { id } = req.params;
         console.log('Fetching product ID:', id);
-        const product = await Product.findById(id).populate('items.item');
+        const product = await Product.findById(id)
+            .populate('items.item')
+            .populate('customerId', 'username phone address');
 
         if (!product) {
             console.error('[PDF] Product not found in DB for ID:', id);
             return res.status(404).json({ success: false, message: 'Quotation not found' });
         }
+
+        // Dynamic Profile Sync: Override static data with latest from profile if available
+        if (product.customerId) {
+            product.name = product.customerId.username || product.name;
+            product.number = product.customerId.phone || product.number;
+            product.address = product.customerId.address || product.address;
+        }
+
         console.log('[PDF] Product found:', product.name, '| Price Type:', product.value);
 
         // Process items and images

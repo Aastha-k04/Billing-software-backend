@@ -120,10 +120,37 @@ exports.getMyQuotations = async (req, res) => {
 
         const quotations = await Product.find({ $or: queryConditions })
             .populate("items.item")
-            .sort({ createdAt: -1 });
+            .populate("customerId", "username phone address")
+            .sort({ createdAt: -1 })
+            .lean();
 
-        console.log(`✅ Found ${quotations.length} quotations for user ${user.username}`);
-        res.json({ success: true, quotations });
+        const transformedQuotations = quotations.map(product => {
+            // Ensure includeGst is always present as boolean
+            product.includeGst = product.includeGst === true;
+
+            // Dynamic Profile Sync: Override with latest profile info if customerId exists
+            if (product.customerId) {
+                product.name = product.customerId.username || product.name;
+                product.number = product.customerId.phone || product.number;
+                product.address = product.customerId.address || product.address;
+            }
+
+            // Transform items to flatten the { item: {...}, quantity } structure
+            product.items = (product.items || []).map(itemEntry => {
+                if (itemEntry.item) {
+                    return {
+                        ...itemEntry.item,
+                        quantity: itemEntry.quantity,
+                    };
+                }
+                return null;
+            }).filter(item => item !== null);
+
+            return product;
+        });
+
+        console.log(`✅ Found and transformed ${transformedQuotations.length} quotations for user ${user.username}`);
+        res.json({ success: true, quotations: transformedQuotations });
     } catch (err) {
         res.status(500).json({ success: false, message: "Error fetching quotations", error: err.message });
     }
